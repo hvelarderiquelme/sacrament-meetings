@@ -44,7 +44,7 @@ export default function MeetingCard({ meeting }: MeetingCardProps) {
         </Link>
         <Link 
           href={`/meetings/${meeting.id}/print`}
-          target="_blank"
+          aria-label={`Print ${getDisplayDate(meeting.date)} agenda`}
           className="text-xs font-semibold text-slate-600 hover:text-slate-900 border border-transparent hover:border-slate-200 px-2.5 py-2 rounded-lg transition-all"
         >
           🖨️

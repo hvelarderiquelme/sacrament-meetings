@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import { getDisplayDate } from '@/lib/dates';
 import { SacramentMeeting } from '@/lib/types';
+
 
 interface MeetingDetailProps {
   meeting: SacramentMeeting;

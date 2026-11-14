@@ -45,7 +45,7 @@ export default async function Home() {
 
         {/* Description using crisp Inter font */}
         <p className="font-sans text-slate-600 leading-relaxed max-w-sm mx-auto text-sm md:text-base">
-          Welcome to your ward's digital bulletin. View or print current and past weekly program agendas, or sign in as a leader to schedule upcoming meetings.
+          Welcome to your ward digital bulletin. View or print current and past weekly program agendas, or sign in as a leader to schedule upcoming meetings.
         </p>
 
         {/* Clear Call to Action Navigation Buttons */}

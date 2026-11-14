@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { meetingsDb } from '@/lib/meetings-db';
+import { getMeetingById } from '@/lib/meetings-db';
 
 interface RouteContext {
   params: Promise<{ id: string }> | { id: string };
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     // Scan database utility
-    const meeting = meetingsDb.getById(parsedId);
+    const meeting = await getMeetingById(parsedId);
 
     // Specification: Return 404 when no meeting with the given ID exists
     if (!meeting) {
@@ -26,8 +26,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     // Specification: Return 200 with the matching meeting when the ID is valid
-    return NextResponse.json(meeting);
+    return NextResponse.json({ meeting });
   } catch (error) {
+    console.error("API Route Error:", error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
