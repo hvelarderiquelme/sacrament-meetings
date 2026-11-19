@@ -14,12 +14,12 @@ export default function AppWorkspaceLayout({
       icon: '📋',
       isActive: true, // You can toggle this dynamically using your active route path later!
     },
-    // {
-    //   label: 'Schedule New Sunday',
-    //   href: '/meetings/create',
-    //   icon: '➕',
-    //   isActive: false,
-    // }
+    {
+      label: 'Schedule New Sunday',
+      href: '/meetings/create',
+      icon: '➕',
+      isActive: false,
+    }
   ];
 
   return (
