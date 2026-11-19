@@ -10,10 +10,26 @@ import {
 } from "./meetings-db";
 import { Speaker, BusinessItem } from "./types";
 
-const HymnSchema = z.object({
-  number: z.coerce.number().int().positive("Hymn number must be a positive number"),
-  title: z.string().trim().min(1, "Hymn title is required"),
-});
+export type State = {
+  errors?: {
+    date?: string[];
+    meetingType?: string[];
+    presiding?: string[];
+    conducting?: string[];
+    openingPrayer?: string[];
+    closingPrayer?: string[];
+    openingHymnNumber?: string[];
+    openingHymnTitle?: string[];
+    sacramentHymnNumber?: string[];
+    sacramentHymnTitle?: string[];
+    closingHymnNumber?: string[];
+    closingHymnTitle?: string[];
+    announcements?: string[];
+    speakers?: string[];
+    wardBusiness?: string[];
+  };
+  message?: string | null;
+};
 
 const SpeakerSchema = z.object({
   name: z.string().trim().min(1),
@@ -28,23 +44,38 @@ const BusinessItemSchema = z.object({
   officiator: z.string().trim().optional(),
 });
 
+// Flat field keys match form inputs so fieldErrors maps 1-to-1 with UI fields
 const MeetingFormSchema = z.object({
-  date: z.string().min(1, "Meeting date is required"),
+  date: z.string().min(1, "Please select a meeting date."),
   meetingType: z.enum(["regular", "testimony", "stake", "general", "special"]),
-  presiding: z.string().trim().min(1, "Presiding officer is required"),
-  conducting: z.string().trim().min(1, "Conducting officer is required"),
-  openingPrayer: z.string().trim().min(1, "Opening prayer is required"),
-  closingPrayer: z.string().trim().min(1, "Closing prayer is required"),
+  presiding: z.string().trim().min(1, "Presiding officer is required."),
+  conducting: z.string().trim().min(1, "Conducting officer is required."),
+  openingPrayer: z.string().trim().min(1, "Opening prayer is required."),
+  closingPrayer: z.string().trim().min(1, "Closing prayer is required."),
   stakeBusiness: z.boolean(),
-  openingHymn: HymnSchema,
-  sacramentHymn: HymnSchema,
-  closingHymn: HymnSchema,
+   openingHymnNumber: z.coerce
+    .number({ error: "Opening hymn must be a number." })
+    .int("Opening hymn must be a whole number.")
+    .positive("Opening hymn must be greater than 0."),
+  openingHymnTitle: z.string().trim().min(1, "Opening hymn title is required."),
+  sacramentHymnNumber: z.coerce
+    .number({ error: "Sacrament hymn must be a number." })
+    .int("Sacrament hymn must be a whole number.")
+    .positive("Sacrament hymn must be greater than 0."),
+  sacramentHymnTitle: z
+    .string()
+    .trim()
+    .min(1, "Sacrament hymn title is required."),
+  closingHymnNumber: z.coerce
+    .number({ error: "Closing hymn must be a number." })
+    .int("Closing hymn must be a whole number.")
+    .positive("Closing hymn must be greater than 0."),
+  closingHymnTitle: z.string().trim().min(1, "Closing hymn title is required."),
   announcements: z.array(z.string()),
   speakers: z.array(SpeakerSchema),
   wardBusiness: z.array(BusinessItemSchema),
 });
 
-// Helper to extract and pack raw FormData before Zod safeParse
 function parseRawMeetingFormData(formData: FormData) {
   const announcements = (formData.getAll("announcements") as string[])
     .map((item) => item.trim())
@@ -52,7 +83,10 @@ function parseRawMeetingFormData(formData: FormData) {
 
   const speakerNames = formData.getAll("speakerName") as string[];
   const speakerTopics = formData.getAll("speakerTopic") as string[];
-  const speakerTypes = formData.getAll("speakerType") as ("speaker" | "musical-number")[];
+  const speakerTypes = formData.getAll("speakerType") as (
+    | "speaker"
+    | "musical-number"
+  )[];
 
   const speakers: Speaker[] = speakerNames
     .map((name, index) => ({
@@ -84,77 +118,131 @@ function parseRawMeetingFormData(formData: FormData) {
     openingPrayer: formData.get("openingPrayer"),
     closingPrayer: formData.get("closingPrayer"),
     stakeBusiness: formData.get("stakeBusiness") === "on",
-    openingHymn: {
-      number: formData.get("openingHymnNumber"),
-      title: formData.get("openingHymnTitle"),
-    },
-    sacramentHymn: {
-      number: formData.get("sacramentHymnNumber"),
-      title: formData.get("sacramentHymnTitle"),
-    },
-    closingHymn: {
-      number: formData.get("closingHymnNumber"),
-      title: formData.get("closingHymnTitle"),
-    },
+    openingHymnNumber: formData.get("openingHymnNumber"),
+    openingHymnTitle: formData.get("openingHymnTitle"),
+    sacramentHymnNumber: formData.get("sacramentHymnNumber"),
+    sacramentHymnTitle: formData.get("sacramentHymnTitle"),
+    closingHymnNumber: formData.get("closingHymnNumber"),
+    closingHymnTitle: formData.get("closingHymnTitle"),
     announcements,
     speakers,
     wardBusiness,
   };
 }
 
-export async function createMeeting(formData: FormData) {
+export async function createMeeting(
+  prevState: State,
+  formData: FormData
+): Promise<State> {
   const rawData = parseRawMeetingFormData(formData);
   const validatedFields = MeetingFormSchema.safeParse(rawData);
 
   if (!validatedFields.success) {
-    console.error("Validation failed:", validatedFields.error.flatten().fieldErrors);
-    throw new Error("Invalid meeting form fields. Please check your inputs.");
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: "Missing or invalid fields. Failed to create meeting.",
+    };
   }
 
-    try {
-      await createMeetingInDb(validatedFields.data);
-    } catch (error) {
-      console.error("Failed to create meeting:", error);
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        (error as { code?: string }).code === "23505"
-      ) {
-        throw new Error(`A meeting on ${validatedFields.data.date} already exists.`);
-      }
-      throw new Error("Database Error: Failed to create meeting.");
-   }
+  const d = validatedFields.data;
 
-  revalidatePath("/meetings");
-  redirect("/meetings");
-}
-
-// Alias kept for backwards compatibility if any file still imports CreateMeeting
-export const CreateMeeting = createMeeting;
-
-export async function updateMeeting(id: number, formData: FormData) {
-  const rawData = parseRawMeetingFormData(formData);
-  const validatedFields = MeetingFormSchema.safeParse(rawData);
-
-  if (!validatedFields.success) {
-    console.error("Validation failed:", validatedFields.error.flatten().fieldErrors);
-    throw new Error("Invalid meeting form fields. Please check your inputs.");
-  }
-
-   try {
-    await updateMeetingInDb(id, validatedFields.data);
+  try {
+    await createMeetingInDb({
+      date: d.date,
+      meetingType: d.meetingType,
+      presiding: d.presiding,
+      conducting: d.conducting,
+      openingPrayer: d.openingPrayer,
+      closingPrayer: d.closingPrayer,
+      stakeBusiness: d.stakeBusiness,
+      openingHymn: { number: d.openingHymnNumber, title: d.openingHymnTitle },
+      sacramentHymn: {
+        number: d.sacramentHymnNumber,
+        title: d.sacramentHymnTitle,
+      },
+      closingHymn: { number: d.closingHymnNumber, title: d.closingHymnTitle },
+      announcements: d.announcements,
+      speakers: d.speakers,
+      wardBusiness: d.wardBusiness,
+    });
   } catch (error) {
-    console.error(`Failed to update meeting ${id}`, error);
+    console.error("Failed to create meeting:", error);
     if (
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
       (error as { code?: string }).code === "23505"
     ) {
-      throw new Error(`Another meeting already exists on ${validatedFields.data.date}.`);
+      return {
+        errors: {
+          date: [`A sacrament meeting for ${d.date} already exists.`],
+        },
+        message: "Duplicate meeting date. Please select a different date.",
+      };
     }
-    throw new Error("Database Error: Failed to update meeting.");
+    return {
+      message: "Database Error: Failed to create meeting.",
+    };
+  }
+
+  revalidatePath("/meetings");
+  redirect("/meetings");
+}
+
+export async function updateMeeting(
+  id: number,
+  prevState: State,
+  formData: FormData
+): Promise<State> {
+  const rawData = parseRawMeetingFormData(formData);
+  const validatedFields = MeetingFormSchema.safeParse(rawData);
+
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: "Missing or invalid fields. Failed to update meeting.",
+    };
+  }
+
+  const d = validatedFields.data;
+
+  try {
+    await updateMeetingInDb(id, {
+      date: d.date,
+      meetingType: d.meetingType,
+      presiding: d.presiding,
+      conducting: d.conducting,
+      openingPrayer: d.openingPrayer,
+      closingPrayer: d.closingPrayer,
+      stakeBusiness: d.stakeBusiness,
+      openingHymn: { number: d.openingHymnNumber, title: d.openingHymnTitle },
+      sacramentHymn: {
+        number: d.sacramentHymnNumber,
+        title: d.sacramentHymnTitle,
+      },
+      closingHymn: { number: d.closingHymnNumber, title: d.closingHymnTitle },
+      announcements: d.announcements,
+      speakers: d.speakers,
+      wardBusiness: d.wardBusiness,
+    });
+  } catch (error) {
+    console.error(`Failed to update meeting ${id}:`, error);
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "23505"
+    ) {
+      return {
+        errors: {
+          date: [`Another sacrament meeting already exists on ${d.date}.`],
+        },
+        message: "Duplicate meeting date. Please select a different date.",
+      };
+    }
+    return {
+      message: "Database Error: Failed to update meeting.",
+    };
   }
 
   revalidatePath("/meetings");
@@ -166,7 +254,7 @@ export async function deleteMeeting(id: number) {
   try {
     await deleteMeetingFromDb(id);
   } catch (error) {
-    console.error(`Failed to delete meeting ${id}`, error);
+    console.error(`Failed to delete meeting ${id}:`, error);
     throw new Error("Database Error: Failed to delete meeting.");
   }
 

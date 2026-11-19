@@ -1,38 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useActionState } from "react";
 import Link from "next/link";
-import { CreateMeeting } from "@/lib/actions";
+import { createMeeting, State } from "@/lib/actions";
+
+function FieldError({ id, errors }: { id: string; errors?: string[] }) {
+  return (
+    <div id={id} aria-live="polite" aria-atomic="true">
+      {errors &&
+        errors.map((error) => (
+          <p key={error} className="mt-1.5 text-xs font-medium text-red-600">
+            {error}
+          </p>
+        ))}
+    </div>
+  );
+}
 
 export default function CreateMeetingPage() {
+  const initialState: State = { message: null, errors: {} };
+  const [state, formAction, isPending] = useActionState(
+    createMeeting,
+    initialState
+  );
+
   // Track each dynamic Ward Business row by a unique timestamp ID
   const [businessIds, setBusinessIds] = useState<number[]>([]);
   const [announcementIds, setAnnouncementIds] = useState<number[]>([]);
   const [speakerIds, setSpeakerIds] = useState<number[]>([]);
 
-  const addBusiness = () => {
-    setBusinessIds((prev) => [...prev, Date.now()]);
-  };
-
-  const removeBusiness = (idToRemove: number) => {
+  const addBusiness = () => setBusinessIds((prev) => [...prev, Date.now()]);
+  const removeBusiness = (idToRemove: number) =>
     setBusinessIds((prev) => prev.filter((id) => id !== idToRemove));
-  };
 
-  const addAnnouncement = () => {
+  const addAnnouncement = () =>
     setAnnouncementIds((prev) => [...prev, Date.now()]);
-  };
-
-  const removeAnnouncement = (idToRemove: number) => {
+  const removeAnnouncement = (idToRemove: number) =>
     setAnnouncementIds((prev) => prev.filter((id) => id !== idToRemove));
-  };
 
-  const addSpeaker = () => {
-    setSpeakerIds((prev) => [...prev, Date.now()]);
-  };
-
-  const removeSpeaker = (idToRemove: number) => {
+  const addSpeaker = () => setSpeakerIds((prev) => [...prev, Date.now()]);
+  const removeSpeaker = (idToRemove: number) =>
     setSpeakerIds((prev) => prev.filter((id) => id !== idToRemove));
-  };
 
   const labelClass =
     "text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5";
@@ -68,7 +76,16 @@ export default function CreateMeetingPage() {
           </p>
         </div>
 
-        <form action={CreateMeeting} className="space-y-8">
+        {/* Form-level status banner */}
+        <div aria-live="polite" aria-atomic="true">
+          {state.message && (
+            <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs font-medium text-red-700">
+              {state.message}
+            </div>
+          )}
+        </div>
+
+        <form action={formAction} noValidate className="space-y-8">
           {/* Basic meeting info */}
           <section className="space-y-4 bg-slate-50/50 p-5 rounded-xl border border-slate-100">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -85,8 +102,10 @@ export default function CreateMeetingPage() {
                   id="date"
                   name="date"
                   required
+                  aria-describedby="date-error"
                   className={inputClass}
                 />
+                <FieldError id="date-error" errors={state.errors?.date} />
               </div>
 
               <div>
@@ -96,6 +115,7 @@ export default function CreateMeetingPage() {
                 <select
                   id="meetingType"
                   name="meetingType"
+                  aria-describedby="meetingType-error"
                   className={inputClass}
                 >
                   <option value="regular">Regular</option>
@@ -104,6 +124,10 @@ export default function CreateMeetingPage() {
                   <option value="general">General Conference</option>
                   <option value="special">Special</option>
                 </select>
+                <FieldError
+                  id="meetingType-error"
+                  errors={state.errors?.meetingType}
+                />
               </div>
 
               <div>
@@ -115,7 +139,12 @@ export default function CreateMeetingPage() {
                   id="presiding"
                   name="presiding"
                   required
+                  aria-describedby="presiding-error"
                   className={inputClass}
+                />
+                <FieldError
+                  id="presiding-error"
+                  errors={state.errors?.presiding}
                 />
               </div>
 
@@ -128,7 +157,12 @@ export default function CreateMeetingPage() {
                   id="conducting"
                   name="conducting"
                   required
+                  aria-describedby="conducting-error"
                   className={inputClass}
+                />
+                <FieldError
+                  id="conducting-error"
+                  errors={state.errors?.conducting}
                 />
               </div>
             </div>
@@ -166,7 +200,12 @@ export default function CreateMeetingPage() {
                   id="openingHymnNumber"
                   name="openingHymnNumber"
                   required
+                  aria-describedby="openingHymnNumber-error"
                   className={inputClass}
+                />
+                <FieldError
+                  id="openingHymnNumber-error"
+                  errors={state.errors?.openingHymnNumber}
                 />
               </div>
 
@@ -179,7 +218,12 @@ export default function CreateMeetingPage() {
                   id="openingHymnTitle"
                   name="openingHymnTitle"
                   required
+                  aria-describedby="openingHymnTitle-error"
                   className={inputClass}
+                />
+                <FieldError
+                  id="openingHymnTitle-error"
+                  errors={state.errors?.openingHymnTitle}
                 />
               </div>
             </div>
@@ -194,7 +238,12 @@ export default function CreateMeetingPage() {
                 id="openingPrayer"
                 name="openingPrayer"
                 required
+                aria-describedby="openingPrayer-error"
                 className={inputClass}
+              />
+              <FieldError
+                id="openingPrayer-error"
+                errors={state.errors?.openingPrayer}
               />
             </div>
 
@@ -214,16 +263,24 @@ export default function CreateMeetingPage() {
               </div>
 
               <div className="space-y-3">
-                {announcementIds.map((id) => (
+                {announcementIds.map((id, index) => (
                   <div
                     key={id}
                     className="p-4 rounded-xl bg-slate-50/50 border border-slate-100 space-y-2.5"
                   >
+                    <label
+                      htmlFor={`announcement-${id}`}
+                      className={labelClass}
+                    >
+                      Announcement #{index + 1}
+                    </label>
                     <textarea
+                      id={`announcement-${id}`}
                       maxLength={500}
                       name="announcements"
                       rows={2}
                       placeholder="Write the announcement here"
+                      aria-describedby="announcements-error"
                       className={inputClass}
                     />
 
@@ -239,6 +296,10 @@ export default function CreateMeetingPage() {
                   </div>
                 ))}
               </div>
+              <FieldError
+                id="announcements-error"
+                errors={state.errors?.announcements}
+              />
             </section>
 
             {/* Speakers */}
@@ -263,28 +324,58 @@ export default function CreateMeetingPage() {
                     className="p-4 rounded-xl bg-white border border-slate-200/80 shadow-2xs space-y-3"
                   >
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <select
-                        name="speakerType"
-                        defaultValue="speaker"
-                        className={inputClass}
-                      >
-                        <option value="speaker">Speaker</option>
-                        <option value="musical-number">Musical Number</option>
-                      </select>
+                      <div>
+                        <label
+                          htmlFor={`speakerType-${id}`}
+                          className={labelClass}
+                        >
+                          Type
+                        </label>
+                        <select
+                          id={`speakerType-${id}`}
+                          name="speakerType"
+                          defaultValue="speaker"
+                          aria-describedby="speakers-error"
+                          className={inputClass}
+                        >
+                          <option value="speaker">Speaker</option>
+                          <option value="musical-number">Musical Number</option>
+                        </select>
+                      </div>
 
-                      <input
-                        type="text"
-                        name="speakerName"
-                        placeholder="Name"
-                        className={inputClass}
-                      />
+                      <div>
+                        <label
+                          htmlFor={`speakerName-${id}`}
+                          className={labelClass}
+                        >
+                          Name
+                        </label>
+                        <input
+                          id={`speakerName-${id}`}
+                          type="text"
+                          name="speakerName"
+                          placeholder="Name"
+                          aria-describedby="speakers-error"
+                          className={inputClass}
+                        />
+                      </div>
 
-                      <input
-                        type="text"
-                        name="speakerTopic"
-                        placeholder="Topic or Song Title"
-                        className={inputClass}
-                      />
+                      <div>
+                        <label
+                          htmlFor={`speakerTopic-${id}`}
+                          className={labelClass}
+                        >
+                          Topic / Song
+                        </label>
+                        <input
+                          id={`speakerTopic-${id}`}
+                          type="text"
+                          name="speakerTopic"
+                          placeholder="Topic or Song Title"
+                          aria-describedby="speakers-error"
+                          className={inputClass}
+                        />
+                      </div>
                     </div>
 
                     <div className="flex justify-end">
@@ -299,9 +390,10 @@ export default function CreateMeetingPage() {
                   </div>
                 ))}
               </div>
+              <FieldError id="speakers-error" errors={state.errors?.speakers} />
             </section>
 
-            {/* Ward Business */}
+                        {/* Ward Business */}
             <section className="space-y-3 pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold tracking-wide uppercase text-slate-400">
@@ -323,30 +415,73 @@ export default function CreateMeetingPage() {
                     className="p-4 rounded-xl bg-slate-50/50 border border-slate-100 space-y-3"
                   >
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <input
-                        type="text"
-                        name="businessDescription"
-                        placeholder="Description (e.g., Release, Sustaining)"
-                        className={inputClass}
-                      />
-                      <input
-                        type="text"
-                        name="businessName"
-                        placeholder="Member Name"
-                        className={inputClass}
-                      />
-                      <input
-                        type="text"
-                        name="businessCalling"
-                        placeholder="Calling (optional)"
-                        className={inputClass}
-                      />
-                      <input
-                        type="text"
-                        name="businessOfficiator"
-                        placeholder="Officiator (optional)"
-                        className={inputClass}
-                      />
+                      <div>
+                        <label
+                          htmlFor={`businessDescription-${id}`}
+                          className={labelClass}
+                        >
+                          Description
+                        </label>
+                        <input
+                          id={`businessDescription-${id}`}
+                          type="text"
+                          name="businessDescription"
+                          placeholder="Description (e.g., Release, Sustaining)"
+                          aria-describedby="wardBusiness-error"
+                          className={inputClass}
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`businessName-${id}`}
+                          className={labelClass}
+                        >
+                          Member Name
+                        </label>
+                        <input
+                          id={`businessName-${id}`}
+                          type="text"
+                          name="businessName"
+                          placeholder="Member Name"
+                          aria-describedby="wardBusiness-error"
+                          className={inputClass}
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`businessCalling-${id}`}
+                          className={labelClass}
+                        >
+                          Calling (Optional)
+                        </label>
+                        <input
+                          id={`businessCalling-${id}`}
+                          type="text"
+                          name="businessCalling"
+                          placeholder="Calling (optional)"
+                          aria-describedby="wardBusiness-error"
+                          className={inputClass}
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`businessOfficiator-${id}`}
+                          className={labelClass}
+                        >
+                          Officiator (Optional)
+                        </label>
+                        <input
+                          id={`businessOfficiator-${id}`}
+                          type="text"
+                          name="businessOfficiator"
+                          placeholder="Officiator (optional)"
+                          aria-describedby="wardBusiness-error"
+                          className={inputClass}
+                        />
+                      </div>
                     </div>
 
                     <div className="flex justify-end">
@@ -361,10 +496,13 @@ export default function CreateMeetingPage() {
                   </div>
                 ))}
               </div>
+              <FieldError
+                id="wardBusiness-error"
+                errors={state.errors?.wardBusiness}
+              />
             </section>
 
-
-                                {/* Sacrament Hymn */}
+            {/* Sacrament Hymn */}
             <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/30 space-y-3">
               <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
                 Sacrament Hymn
@@ -379,7 +517,12 @@ export default function CreateMeetingPage() {
                     id="sacramentHymnNumber"
                     name="sacramentHymnNumber"
                     required
+                    aria-describedby="sacramentHymnNumber-error"
                     className={inputClass}
+                  />
+                  <FieldError
+                    id="sacramentHymnNumber-error"
+                    errors={state.errors?.sacramentHymnNumber}
                   />
                 </div>
 
@@ -392,7 +535,12 @@ export default function CreateMeetingPage() {
                     id="sacramentHymnTitle"
                     name="sacramentHymnTitle"
                     required
+                    aria-describedby="sacramentHymnTitle-error"
                     className={inputClass}
+                  />
+                  <FieldError
+                    id="sacramentHymnTitle-error"
+                    errors={state.errors?.sacramentHymnTitle}
                   />
                 </div>
               </div>
@@ -409,7 +557,12 @@ export default function CreateMeetingPage() {
                   id="closingHymnNumber"
                   name="closingHymnNumber"
                   required
+                  aria-describedby="closingHymnNumber-error"
                   className={inputClass}
+                />
+                <FieldError
+                  id="closingHymnNumber-error"
+                  errors={state.errors?.closingHymnNumber}
                 />
               </div>
 
@@ -422,7 +575,12 @@ export default function CreateMeetingPage() {
                   id="closingHymnTitle"
                   name="closingHymnTitle"
                   required
+                  aria-describedby="closingHymnTitle-error"
                   className={inputClass}
+                />
+                <FieldError
+                  id="closingHymnTitle-error"
+                  errors={state.errors?.closingHymnTitle}
                 />
               </div>
             </div>
@@ -437,12 +595,17 @@ export default function CreateMeetingPage() {
                 id="closingPrayer"
                 name="closingPrayer"
                 required
+                aria-describedby="closingPrayer-error"
                 className={inputClass}
+              />
+              <FieldError
+                id="closingPrayer-error"
+                errors={state.errors?.closingPrayer}
               />
             </div>
           </section>
 
-          {/* Submit Button */}
+          {/* Submit Action Bar */}
           <div className="pt-6 border-t border-slate-100 flex items-center justify-end gap-3">
             <Link
               href="/meetings"
@@ -452,9 +615,10 @@ export default function CreateMeetingPage() {
             </Link>
             <button
               type="submit"
-              className="bg-slate-950 text-white font-medium text-xs rounded-xl px-6 py-2.5 hover:bg-slate-800 cursor-pointer"
+              disabled={isPending}
+              className="bg-slate-950 text-white font-medium text-xs rounded-xl px-6 py-2.5 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              Save Meeting
+              {isPending ? "Saving..." : "Save Meeting"}
             </button>
           </div>
         </form>
