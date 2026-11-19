@@ -112,18 +112,19 @@ export async function createMeeting(formData: FormData) {
   }
 
     try {
-    await createMeetingInDb(validatedFields.data);
-  } catch (error) {
-    if (
-      typeof error === "object" &&
-      error !== null &&
-      "code" in error &&
-      (error as { code?: string }).code === "23505"
-    ) {
-      throw new Error(`A meeting on ${validatedFields.data.date} already exists.`);
-    }
-    throw new Error("Database Error: Failed to create meeting.");
-  }
+      await createMeetingInDb(validatedFields.data);
+    } catch (error) {
+      console.error("Failed to create meeting:", error);
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: string }).code === "23505"
+      ) {
+        throw new Error(`A meeting on ${validatedFields.data.date} already exists.`);
+      }
+      throw new Error("Database Error: Failed to create meeting.");
+   }
 
   revalidatePath("/meetings");
   redirect("/meetings");
@@ -144,6 +145,7 @@ export async function updateMeeting(id: number, formData: FormData) {
    try {
     await updateMeetingInDb(id, validatedFields.data);
   } catch (error) {
+    console.error(`Failed to update meeting ${id}`, error);
     if (
       typeof error === "object" &&
       error !== null &&
@@ -164,7 +166,7 @@ export async function deleteMeeting(id: number) {
   try {
     await deleteMeetingFromDb(id);
   } catch (error) {
-    console.error("Database Error:", error);
+    console.error(`Failed to delete meeting ${id}`, error);
     throw new Error("Database Error: Failed to delete meeting.");
   }
 
