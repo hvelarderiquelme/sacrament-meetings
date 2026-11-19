@@ -3,6 +3,7 @@ import Link from 'next/link';
 import MeetingDetail from '@/components/meeting-detail'; 
 import { SacramentMeeting } from '@/lib/types';
 import { getDatabaseUrl } from '@/lib/url';
+import { deleteMeeting } from '@/lib/actions';
 
 // This handles local machines or live Vercel domains cleanly on every request
 const baseUrl = getDatabaseUrl();
@@ -17,14 +18,6 @@ export default async function MeetingDetailPage({ params }: PageProps) {
   const resolvedParams = await params;
   const rawId = resolvedParams.id;
 
-  // This handles local machines or live Vercel domains cleanly on every request
-  // const baseUrl = process.env.NEXT_PUBLIC_APP_URL 
-  // ? `https://${process.env.NEXT_PUBLIC_APP_URL}` 
-  // : process.env.VERCEL_URL 
-  //   ? `https://${process.env.VERCEL_URL}` 
-  //   : 'http://127.0.0.1:3000';
-
-  
   // 1. Declare state tracking variables outside the block scope
   let meeting: SacramentMeeting | null = null;
   let isFetchError = false;
@@ -56,7 +49,8 @@ export default async function MeetingDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  
+  // Bind the meeting ID to the Server Action
+  const deleteMeetingWithId = deleteMeeting.bind(null, Number(meeting.id));
 
   // 3. Render default success layout
   return (
@@ -65,11 +59,27 @@ export default async function MeetingDetailPage({ params }: PageProps) {
         <Link href="/meetings" className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1">
           ← Back to Agendas
         </Link>
+      
+      <div className="flex items-center gap-2">
         <Link href={`/meetings/${meeting.id}/print`} className="bg-slate-950 text-white font-medium text-xs rounded-xl px-4 py-2 hover:bg-slate-800">
           🖨️ Open Print View
         </Link>
-      </div>
 
+        <Link href={`/meetings/${meeting.id}/edit`}
+              className="bg-slate-100 text-slate-800 font-medium text-xs rounded-xl px-4 py-2 hover:bg-slate-200 border border-slate-200"
+        >
+          ✏️ Edit
+        </Link>
+
+        <form action={deleteMeetingWithId}>
+          <button type="submit"
+                  className="bg-red-50 text-red-600 font-medium text-xs rounded-xl px-4 py-2 hover:bg-red-100 border border-red-200 cursor-pointer"
+          >
+             🗑️ Delete
+          </button>
+        </form>
+        </div>
+      </div>
       <MeetingDetail meeting={meeting} />
     </div>
   );

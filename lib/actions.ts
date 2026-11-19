@@ -1,188 +1,173 @@
 "use server";
-import { sql } from "@vercel/postgres";
+
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { Hymn, 
-         MeetingType,
-         Speaker,
-         BusinessItem
-} from "./types";
+import {
+  createMeetingInDb,
+  updateMeetingInDb,
+  deleteMeetingFromDb,
+} from "./meetings-db";
+import { Speaker, BusinessItem } from "./types";
 
-export async function CreateMeeting(formData: FormData) {
-    const date = formData.get("date") as string;
-    const meetingType = formData.get("meetingType") as MeetingType;
-    const presiding = formData.get("presiding") as string;
-    const conducting = formData.get("conducting") as string;
-    const openingPrayer = formData.get("openingPrayer") as string;
-    const closingPrayer = formData.get("closingPrayer") as string;
+const HymnSchema = z.object({
+  number: z.coerce.number().int().positive("Hymn number must be a positive number"),
+  title: z.string().trim().min(1, "Hymn title is required"),
+});
 
-    //Checkboxes in FormData return 'on' if checked, or null if unchecked
-    const stakeBusiness = formData.get("stakeBusiness") === 'on';
+const SpeakerSchema = z.object({
+  name: z.string().trim().min(1),
+  topic: z.string().trim(),
+  type: z.enum(["speaker", "musical-number"]),
+});
 
-    //Pack a single nested object (Hymn)
-    const openingHymn: Hymn = {
-        number: Number(formData.get("openingHymnNumber")),
-        title: formData.get("openingHymnTitle") as string,
-    };
+const BusinessItemSchema = z.object({
+  description: z.string().trim(),
+  name: z.string().trim(),
+  calling: z.string().trim().optional(),
+  officiator: z.string().trim().optional(),
+});
 
-    const sacramentHymn = {
-        number: Number(formData.get("sacramentHymnNumber")),
-        title: formData.get("sacramentHymnTitle") as string,
-    };
+const MeetingFormSchema = z.object({
+  date: z.string().min(1, "Meeting date is required"),
+  meetingType: z.enum(["regular", "testimony", "stake", "general", "special"]),
+  presiding: z.string().trim().min(1, "Presiding officer is required"),
+  conducting: z.string().trim().min(1, "Conducting officer is required"),
+  openingPrayer: z.string().trim().min(1, "Opening prayer is required"),
+  closingPrayer: z.string().trim().min(1, "Closing prayer is required"),
+  stakeBusiness: z.boolean(),
+  openingHymn: HymnSchema,
+  sacramentHymn: HymnSchema,
+  closingHymn: HymnSchema,
+  announcements: z.array(z.string()),
+  speakers: z.array(SpeakerSchema),
+  wardBusiness: z.array(BusinessItemSchema),
+});
 
-    const closingHymn = {
-        number: Number(formData.get("closingHymnNumber")),
-        title: formData.get("closingHymnTitle") as string,
-    };
-
-    //Grabs all inputs with name="announcements" as a string array
-    const announcements = (formData.getAll("announcements") as string[])
+// Helper to extract and pack raw FormData before Zod safeParse
+function parseRawMeetingFormData(formData: FormData) {
+  const announcements = (formData.getAll("announcements") as string[])
     .map((item) => item.trim())
     .filter((item) => item !== "");
 
-    //Grabs Speakers information
-    const speakerNames = formData.getAll("speakerName") as string[];
-    const speakerTopics = formData.getAll("speakerTopic") as string[];
-    const speakerTypes = formData.getAll("speakerType") as ("speaker" | "musical-number") [];
+  const speakerNames = formData.getAll("speakerName") as string[];
+  const speakerTopics = formData.getAll("speakerTopic") as string[];
+  const speakerTypes = formData.getAll("speakerType") as ("speaker" | "musical-number")[];
 
-    const speakers: Speaker[] = speakerNames
+  const speakers: Speaker[] = speakerNames
     .map((name, index) => ({
-        name: name.trim(),
-        topic: (speakerTopics[index] || "").trim(),
-        type: speakerTypes[index] || "speaker",
+      name: name.trim(),
+      topic: (speakerTopics[index] || "").trim(),
+      type: speakerTypes[index] || "speaker",
     }))
     .filter((speaker) => speaker.name !== "");
 
-    const businessDescriptions = formData.getAll("businessDescription") as string[];
-    const businessNames = formData.getAll("businessName") as string[];
-    const businessCallings = formData.getAll("businessCalling") as string[];
-    const businessOfficiators = formData.getAll("businessOfficiator") as string[];
+  const businessDescriptions = formData.getAll("businessDescription") as string[];
+  const businessNames = formData.getAll("businessName") as string[];
+  const businessCallings = formData.getAll("businessCalling") as string[];
+  const businessOfficiators = formData.getAll("businessOfficiator") as string[];
 
-    const wardBusiness: BusinessItem[] = businessNames
-        .map((name, index) => ({
-            description: (businessDescriptions[index] || "").trim(),
-            name: name.trim(),
-            calling: businessCallings[index]?.trim() || undefined,
-            officiator: businessOfficiators[index]?.trim() || undefined,
-        }))
-        .filter((item) => item.name !== "" || item.description !== "");
-
-            await sql`
-        INSERT INTO meetings (
-            date,
-            "meetingType",
-            presiding,
-            conducting,
-            announcements,
-            "openingHymn",
-            "openingPrayer",
-            "wardBusiness",
-            "stakeBusiness",
-            "sacramentHymn",
-            speakers,
-            "closingHymn",
-            "closingPrayer"
-        ) VALUES (
-            ${date},
-            ${meetingType},
-            ${presiding},
-            ${conducting},
-            ${announcements as unknown as string},
-            ${JSON.stringify(openingHymn)},
-            ${openingPrayer},
-            ${JSON.stringify(wardBusiness)},
-            ${stakeBusiness},
-            ${JSON.stringify(sacramentHymn)},
-            ${JSON.stringify(speakers)},
-            ${JSON.stringify(closingHymn)},
-            ${closingPrayer}
-        )
-    `;
-
-    revalidatePath("/meetings"); // update to match your meetings list route
-    redirect("/meetings");
-
-    }//end of CreateMeeting
-
-export async function updateMeeting(id: number, formData: FormData){
-    const date = formData.get("date") as string;
-    const meetingType = formData.get("meetingType") as MeetingType;
-    const presiding = formData.get("presiding") as string;
-    const conducting = formData.get("conducting") as string;
-    const openingPrayer = formData.get("openingPrayer") as string;
-    const closingPrayer = formData.get("closingPrayer") as string;
-
-    //Checkboxes in FormData return 'on' if checked, or null if unchecked
-    const stakeBusiness = formData.get("stakeBusiness") === 'on';
-
-    //Pack a single nested object (Hymn)
-    const openingHymn: Hymn = {
-        number: Number(formData.get("openingHymnNumber")),
-        title: formData.get("openingHymnTitle") as string,
-    };
-
-    const sacramentHymn = {
-        number: Number(formData.get("sacramentHymnNumber")),
-        title: formData.get("sacramentHymnTitle") as string,
-    };
-
-    const closingHymn = {
-        number: Number(formData.get("closingHymnNumber")),
-        title: formData.get("closingHymnTitle") as string,
-    };
-
-    //Grabs all inputs with name="announcements" as a string array
-    const announcements = (formData.getAll("announcements") as string[])
-    .map((item) => item.trim())
-    .filter((item) => item !== "");
-
-    //Grabs Speakers information
-    const speakerNames = formData.getAll("speakerName") as string[];
-    const speakerTopics = formData.getAll("speakerTopic") as string[];
-    const speakerTypes = formData.getAll("speakerType") as ("speaker" | "musical-number") [];
-
-    const speakers: Speaker[] = speakerNames
+  const wardBusiness: BusinessItem[] = businessNames
     .map((name, index) => ({
-        name: name.trim(),
-        topic: (speakerTopics[index] || "").trim(),
-        type: speakerTypes[index] || "speaker",
+      description: (businessDescriptions[index] || "").trim(),
+      name: name.trim(),
+      calling: businessCallings[index]?.trim() || undefined,
+      officiator: businessOfficiators[index]?.trim() || undefined,
     }))
-    .filter((speaker) => speaker.name !== "");
+    .filter((item) => item.name !== "" || item.description !== "");
 
-    const businessDescriptions = formData.getAll("businessDescription") as string[];
-    const businessNames = formData.getAll("businessName") as string[];
-    const businessCallings = formData.getAll("businessCalling") as string[];
-    const businessOfficiators = formData.getAll("businessOfficiator") as string[];
+  return {
+    date: formData.get("date"),
+    meetingType: formData.get("meetingType"),
+    presiding: formData.get("presiding"),
+    conducting: formData.get("conducting"),
+    openingPrayer: formData.get("openingPrayer"),
+    closingPrayer: formData.get("closingPrayer"),
+    stakeBusiness: formData.get("stakeBusiness") === "on",
+    openingHymn: {
+      number: formData.get("openingHymnNumber"),
+      title: formData.get("openingHymnTitle"),
+    },
+    sacramentHymn: {
+      number: formData.get("sacramentHymnNumber"),
+      title: formData.get("sacramentHymnTitle"),
+    },
+    closingHymn: {
+      number: formData.get("closingHymnNumber"),
+      title: formData.get("closingHymnTitle"),
+    },
+    announcements,
+    speakers,
+    wardBusiness,
+  };
+}
 
-    const wardBusiness: BusinessItem[] = businessNames
-        .map((name, index) => ({
-            description: (businessDescriptions[index] || "").trim(),
-            name: name.trim(),
-            calling: businessCallings[index]?.trim() || undefined,
-            officiator: businessOfficiators[index]?.trim() || undefined,
-        }))
-        .filter((item) => item.name !== "" || item.description !== "");
+export async function createMeeting(formData: FormData) {
+  const rawData = parseRawMeetingFormData(formData);
+  const validatedFields = MeetingFormSchema.safeParse(rawData);
 
-     await sql`
-        UPDATE meetings
-        SET
-            date = ${date},
-            "meetingType" = ${meetingType},
-            presiding = ${presiding},
-            conducting = ${conducting},
-            announcements = ${announcements as unknown as string},
-            "openingHymn" = ${JSON.stringify(openingHymn)},
-            "openingPrayer" = ${openingPrayer},
-            "wardBusiness" = ${JSON.stringify(wardBusiness)},
-            "stakeBusiness" = ${stakeBusiness},
-            "sacramentHymn" = ${JSON.stringify(sacramentHymn)},
-            speakers = ${JSON.stringify(speakers)},
-            "closingHymn" = ${JSON.stringify(closingHymn)},
-            "closingPrayer" = ${closingPrayer}
-        WHERE id = ${id}
-    `;    
-    
-    revalidatePath("/meetings");
-    revalidatePath(`/meetings/${id}`);
-    redirect("/meetings");
-}//end of updateMeeting
+  if (!validatedFields.success) {
+    console.error("Validation failed:", validatedFields.error.flatten().fieldErrors);
+    throw new Error("Invalid meeting form fields. Please check your inputs.");
+  }
+
+    try {
+    await createMeetingInDb(validatedFields.data);
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "23505"
+    ) {
+      throw new Error(`A meeting on ${validatedFields.data.date} already exists.`);
+    }
+    throw new Error("Database Error: Failed to create meeting.");
+  }
+
+  revalidatePath("/meetings");
+  redirect("/meetings");
+}
+
+// Alias kept for backwards compatibility if any file still imports CreateMeeting
+export const CreateMeeting = createMeeting;
+
+export async function updateMeeting(id: number, formData: FormData) {
+  const rawData = parseRawMeetingFormData(formData);
+  const validatedFields = MeetingFormSchema.safeParse(rawData);
+
+  if (!validatedFields.success) {
+    console.error("Validation failed:", validatedFields.error.flatten().fieldErrors);
+    throw new Error("Invalid meeting form fields. Please check your inputs.");
+  }
+
+   try {
+    await updateMeetingInDb(id, validatedFields.data);
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "23505"
+    ) {
+      throw new Error(`Another meeting already exists on ${validatedFields.data.date}.`);
+    }
+    throw new Error("Database Error: Failed to update meeting.");
+  }
+
+  revalidatePath("/meetings");
+  revalidatePath(`/meetings/${id}`);
+  redirect("/meetings");
+}
+
+export async function deleteMeeting(id: number) {
+  try {
+    await deleteMeetingFromDb(id);
+  } catch (error) {
+    console.error("Database Error:", error);
+    throw new Error("Database Error: Failed to delete meeting.");
+  }
+
+  revalidatePath("/meetings");
+  redirect("/meetings");
+}

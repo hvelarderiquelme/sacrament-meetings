@@ -47,7 +47,7 @@ export async function MeetingsList({
           Get started by scheduling your first Sunday agenda.
         </p>
         <Link
-          href="/meetings/new"
+          href="/meetings/create"
           className="mt-6 inline-flex bg-slate-950 text-white text-sm font-medium rounded-xl px-5 py-3"
         >
           ➕ Schedule First Sunday
