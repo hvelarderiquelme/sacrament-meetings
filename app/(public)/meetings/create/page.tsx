@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import CreateMeeting from "@/lib/actions";
+import { CreateMeeting } from "@/lib/actions";
 
 export default function CreateMeetingPage(){
     //Track each dynamic Ward Business row by a unique timestamp ID
